@@ -1,0 +1,191 @@
+body {
+    font-family: sans-serif;
+    margin: 0;
+    background-color: #f4f4f4;
+    color: #333;
+    padding-top: 80px; /* Adjust based on header height */
+    padding-bottom: 120px; /* Adjust based on footer height */
+}
+
+.container {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 0 20px;
+}
+
+header {
+    background-color: #333;
+    color: #fff;
+    padding: 1rem 0;
+    position: fixed; /* Make header fixed */
+    top: 0; /* Position at the top */
+    width: 100%; /* Full width */
+    z-index: 1000; /* Ensure header is above other content */
+    overflow: hidden; /* Keep this for clearfix */
+}
+
+header::after {
+    content: "";
+    display: table;
+    clear: both;
+}
+
+header h1 {
+    margin: 0;
+    float: left;
+}
+
+.menu-toggle {
+    display: none;
+    background: none;
+    border: none;
+    cursor: pointer;
+    float: right;
+    padding: 10px;
+}
+
+.hamburger {
+    display: block;
+    width: 25px;
+    height: 3px;
+    background-color: #fff;
+    position: relative;
+}
+
+.hamburger::before,
+.hamburger::after {
+    content: "";
+    display: block;
+    width: 25px;
+    height: 3px;
+    background-color: #fff;
+    position: absolute;
+}
+
+.hamburger::before {
+    top: -8px;
+}
+
+.hamburger::after {
+    bottom: -8px;
+}
+
+header ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    float: right;
+}
+
+header li {
+    display: inline-block;
+    margin-left: 20px;
+}
+
+header a {
+    color: #fff;
+    text-decoration: none;
+}
+
+@media (max-width: 768px) {
+    .menu-toggle {
+        display: block;
+    }
+
+    .nav-links {
+        display: none;
+        width: 100%;
+        text-align: center;
+        padding-top: 1rem;
+    }
+
+    .nav-links.active {
+        display: block;
+    }
+
+    header li {
+        display: block;
+        margin: 1rem 0;
+    }
+}
+
+.hero {
+    background-color: #eee;
+    padding: 4rem 0;
+    text-align: center;
+}
+
+.hero h2 {
+    margin-top: 0;
+}
+
+.btn {
+    display: inline-block;
+    background-color: #fc4c02;
+    color: #fff;
+    padding: 10px 20px;
+    text-decoration: none;
+    border-radius: 5px;
+}
+
+.leaderboard {
+    padding: 4rem 0;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+th, td {
+    padding: 10px;
+    border: 1px solid #ccc;
+    text-align: left;
+}
+
+th {
+    background-color: #f4f4f4;
+}
+
+footer {
+    background-color: #333;
+    color: #fff;
+    padding: 1rem 0;
+    text-align: center;
+    position: fixed;
+    bottom: 0;
+    width: 100%;
+    z-index: 1000; /* Ensure footer is above other content */
+}
+
+.recent-activities-grid {
+    display: flex; /* Use flexbox for single column */
+    flex-direction: column; /* Stack items vertically */
+    align-items: center; /* Center items horizontally */
+    gap: 20px;
+    padding: 20px 0;
+}
+
+.activity-card {
+    background-color: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    max-width: 500px; /* Limit card width for better readability on desktop */
+    width: 100%; /* Ensure it takes full width up to max-width */
+}
+
+.activity-card strong {
+    font-size: 1.2em;
+    margin-bottom: 10px;
+    color: #fc4c02;
+}
+
+.activity-card p {
+    margin: 5px 0;
+    font-size: 0.9em;
+    color: #555;
+}
