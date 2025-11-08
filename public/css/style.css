@@ -3,7 +3,7 @@ body {
     margin: 0;
     background-color: #f4f4f4;
     color: #333;
-    padding-top: 80px; /* Adjust based on header height */
+    padding-top: 120px; /* Adjust based on header height */
     padding-bottom: 120px; /* Adjust based on footer height */
 }
 
@@ -13,15 +13,22 @@ body {
     padding: 0 20px;
 }
 
+header nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    height: 80px;
+    position: relative; /* For positioning the dropdown */
+}
+
 header {
     background-color: #333;
     color: #fff;
-    padding: 1rem 0;
-    position: fixed; /* Make header fixed */
-    top: 0; /* Position at the top */
-    width: 100%; /* Full width */
-    z-index: 1000; /* Ensure header is above other content */
-    overflow: hidden; /* Keep this for clearfix */
+    position: fixed;
+    top: 0;
+    width: 100%;
+    z-index: 1000;
 }
 
 header::after {
@@ -32,7 +39,6 @@ header::after {
 
 header h1 {
     margin: 0;
-    float: left;
 }
 
 .menu-toggle {
@@ -40,7 +46,6 @@ header h1 {
     background: none;
     border: none;
     cursor: pointer;
-    float: right;
     padding: 10px;
 }
 
@@ -74,11 +79,10 @@ header ul {
     margin: 0;
     padding: 0;
     list-style: none;
-    float: right;
+    display: flex;
 }
 
 header li {
-    display: inline-block;
     margin-left: 20px;
 }
 
@@ -94,21 +98,45 @@ header a {
 
     .nav-links {
         display: none;
+        position: absolute;
+        top: 100%; /* Position below the nav bar */
+        left: 0;
+        background-color: #333;
         width: 100%;
-        text-align: center;
-        padding-top: 1rem;
+        padding: 0;
+        margin: 0;
+        box-shadow: 0 8px 16px rgba(0,0,0,0.2); /* Add a shadow for depth */
     }
 
     .nav-links.active {
         display: block;
     }
 
+    header ul.nav-links {
+        flex-direction: column;
+        width: 100%;
+    }
+
     header li {
         display: block;
-        margin: 1rem 0;
+        margin: 0;
+        text-align: center;
+        width: 100%;
+        border-bottom: 1px solid #555;
+    }
+
+    header li:last-child {
+        border-bottom: none;
+    }
+
+    header li a {
+        display: block;
+        padding: 1rem;
     }
 }
-
+.nav-links{
+    padding-right: 20px
+}
 .hero {
     background-color: #eee;
     padding: 4rem 0;
@@ -163,7 +191,8 @@ footer {
     flex-direction: column; /* Stack items vertically */
     align-items: center; /* Center items horizontally */
     gap: 20px;
-    padding: 20px 0;
+    min-width: 100%;
+    max-width: 600px;
 }
 
 .activity-card {
@@ -174,7 +203,7 @@ footer {
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    max-width: 500px; /* Limit card width for better readability on desktop */
+    max-width: 600px; /* Limit card width for better readability on desktop */
     width: 100%; /* Ensure it takes full width up to max-width */
 }
 
@@ -188,4 +217,43 @@ footer {
     margin: 5px 0;
     font-size: 0.9em;
     color: #555;
+}
+
+/* Responsive table styles */
+@media (max-width: 480px) {
+    th, td {
+        padding: 6px;
+        font-size: 0.9em;
+    }
+
+    /* Make summary column take more space if needed */
+    td:last-child {
+        word-break: break-word;
+    }
+}
+
+.week-navigation {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.week-nav-button {
+    background-color: #fc4c02;
+    color: #fff;
+    border: none;
+    padding: 5px 10px; /* smaller padding */
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 1.2em; /* bigger font for arrows */
+}
+
+.week-nav-button:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+}
+
+.week-navigation h3 {
+    margin: 0;
 }

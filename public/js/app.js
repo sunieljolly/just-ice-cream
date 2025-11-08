@@ -133,54 +133,103 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    navWeeklyLeaderboard.addEventListener('click', async (e) => {
-        e.preventDefault();
-        showPage(weeklyLeaderboardPage);
-        try {
-            const response = await fetch('/api/weekly-leaderboard');
-            const data = await response.json();
+    let currentWeekDate = new Date();
 
-            weeklyLeaderboardContent.innerHTML = '';
+const fetchAndDisplayWeeklyLeaderboard = async (date) => {
+    try {
+        const dateString = date ? date.toISOString().split('T')[0] : '';
+        const response = await fetch(`/weekly-leaderboard?week=${dateString}`);
+        const data = await response.json();
 
-            data.forEach(weekData => {
-                const weekHeading = document.createElement('h3');
-                weekHeading.textContent = `Week of ${new Date(weekData.week).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`;
-                weeklyLeaderboardContent.appendChild(weekHeading);
+        weeklyLeaderboardContent.innerHTML = '';
 
-                const table = document.createElement('table');
-                table.innerHTML = `
-                    <thead>
-                        <tr>
-                            <th>Rank</th>
-                            <th>Athlete Name</th>
-                            <th>Points (Total)</th>
-                            <th>Walk</th>
-                            <th>Run</th>
-                            <th>Football</th>
-                            <th>Other</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${weekData.athletes.map((athlete, index) => `
-                            <tr>
-                                <td>${index + 1}</td>
-                                <td>${athlete.athlete_name}</td>
-                                <td>${athlete.points.total}</td>
-                                <td>${athlete.points.walk}</td>
-                                <td>${athlete.points.run}</td>
-                                <td>${athlete.points.football}</td>
-                                <td>${athlete.points.other}</td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                `;
-                weeklyLeaderboardContent.appendChild(table);
-            });
-        } catch (error) {
-            console.error('Error fetching weekly leaderboard:', error);
-            alert('Failed to fetch weekly leaderboard.');
+        const getStartOfWeek = (d) => {
+            const date = new Date(d);
+            const day = date.getDay();
+            const diff = date.getDate() - day + (day === 0 ? -6 : 1); // adjust when day is sunday
+            const monday = new Date(date.setDate(diff));
+            monday.setHours(0,0,0,0);
+            return monday;
         }
-    });
+
+        // Add navigation buttons
+        const navigationDiv = document.createElement('div');
+        navigationDiv.classList.add('week-navigation');
+
+        const prevWeek = new Date(date);
+        prevWeek.setDate(prevWeek.getDate() - 7);
+        const prevButton = document.createElement('button');
+        prevButton.textContent = '←';
+        prevButton.classList.add('week-nav-button');
+        prevButton.addEventListener('click', () => {
+            currentWeekDate = prevWeek;
+            fetchAndDisplayWeeklyLeaderboard(currentWeekDate);
+        });
+
+        const nextWeek = new Date(date);
+        nextWeek.setDate(nextWeek.getDate() + 7);
+        const nextButton = document.createElement('button');
+        nextButton.textContent = '→';
+        nextButton.classList.add('week-nav-button');
+        nextButton.addEventListener('click', () => {
+            currentWeekDate = nextWeek;
+            fetchAndDisplayWeeklyLeaderboard(currentWeekDate);
+        });
+
+        const startOfWeek = getStartOfWeek(date);
+        
+        // Disable "Next Week" if it's the current week or a future week
+        const today = new Date();
+        const startOfCurrentWeek = getStartOfWeek(today);
+
+        if (startOfWeek >= startOfCurrentWeek) {
+            nextButton.disabled = true;
+        }
+
+        const weekOfLabel = document.createElement('h3');
+        weekOfLabel.textContent = `Week of ${startOfWeek.toLocaleDateString()}`;
+
+
+        navigationDiv.appendChild(prevButton);
+        navigationDiv.appendChild(weekOfLabel);
+        navigationDiv.appendChild(nextButton);
+        weeklyLeaderboardContent.appendChild(navigationDiv);
+
+
+        const table = document.createElement('table');
+        table.innerHTML = `
+            <thead>
+                <tr>
+                    <th>Rank</th>
+                    <th>Athlete</th>
+                    <th>Points</th>
+                    <th>Summary</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${data.map((row, index) => `
+                    <tr>
+                        <td>${index + 1}</td>
+                        <td>${row.athlete_name}</td>
+                        <td>${row.points}</td>
+                        <td>${row.summary}</td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        `;
+        weeklyLeaderboardContent.appendChild(table);
+    } catch (error) {
+        console.error('Error fetching weekly leaderboard:', error);
+        alert('Failed to fetch weekly leaderboard.');
+    }
+};
+
+navWeeklyLeaderboard.addEventListener('click', (e) => {
+    e.preventDefault();
+    showPage(weeklyLeaderboardPage);
+    currentWeekDate = new Date(); // Reset to current week
+    fetchAndDisplayWeeklyLeaderboard(currentWeekDate);
+});
 
 
 

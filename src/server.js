@@ -197,101 +197,102 @@ app.get('/api/recent-activities', async (req, res) => {
     }
 });
 
-// Helper function to get the Monday of a given week (local time)
-function getMondayOfWeek(date) {
-    const d = new Date(date);
-    const day = d.getDay(); // 0 for Sunday, 1 for Monday, ..., 6 for Saturday
-    const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Adjust if day is Sunday
-    const monday = new Date(d.setDate(diff));
-    monday.setHours(0, 0, 0, 0); // Set to start of the day (local time)
-    return monday;
-}
-
-app.get('/api/weekly-leaderboard', async (req, res) => {
+// Weekly Leaderboard
+app.get('/weekly-leaderboard', async (req, res) => {
     try {
-        const { data: allActivities, error } = await supabase
-            .from('activities')
-            .select('athlete_id, athlete_name, distance, elapsed_time, start_date, activity_type');
-
-        if (error) {
-            console.error('Error fetching all activities for weekly leaderboard:', error);
-            return res.status(500).send('Failed to fetch activities for weekly leaderboard.');
+        // Helper function to get the start of the week (Monday)
+        const getStartOfWeek = (date = new Date()) => {
+            const d = new Date(date);
+            const day = d.getDay(); // 0=Sun, 1=Mon, ...
+            const diff = d.getDate() - day + (day === 0 ? -6 : 1); // adjust when day is sunday
+            const monday = new Date(d.setDate(diff));
+            monday.setHours(0, 0, 0, 0);
+            return monday;
         }
 
-        const weeklyLeaderboard = {};
+        const weekQuery = req.query.week; // e.g., '2025-11-10'
+        const targetDate = weekQuery ? new Date(weekQuery) : new Date();
 
-        allActivities.forEach(activity => {
-            const activityDate = new Date(activity.start_date);
-            const mondayOfWeek = getMondayOfWeek(activityDate);
-            // Use toLocaleDateString to get a consistent string representation of the local Monday
-            const weekString = mondayOfWeek.toLocaleDateString('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit' }); // YYYY-MM-DD format for consistent keys
+        const startOfWeek = getStartOfWeek(targetDate);
+        const endOfWeek = new Date(startOfWeek);
+        endOfWeek.setDate(endOfWeek.getDate() + 7);
 
-            if (!weeklyLeaderboard[weekString]) {
-                weeklyLeaderboard[weekString] = {};
-            }
+        const { data, error } = await supabase
+            .from('activities')
+            .select('*')
+            .gte('start_date', startOfWeek.toISOString())
+            .lt('start_date', endOfWeek.toISOString());
 
-            if (!weeklyLeaderboard[weekString][activity.athlete_id]) {
-                weeklyLeaderboard[weekString][activity.athlete_id] = {
-                    athlete_id: activity.athlete_id,
-                    athlete_name: activity.athlete_name,
-                    points: {
-                        total: 0,
-                        walk: 0,
-                        run: 0,
-                        football: 0,
-                        other: 0,
-                    },
+        if (error) {
+            throw error;
+        }
+
+        const leaderboard = {};
+
+        data.forEach(activity => {
+            const athleteName = activity.athlete_name;
+            if (!leaderboard[athleteName]) {
+                leaderboard[athleteName] = {
+                    athlete_name: athleteName,
+                    points: 0,
+                    walk: 0,
+                    run: 0,
+                    football: 0,
+                    other: 0,
                 };
             }
 
-            let pointsEarned = 0;
-            let activityCategory = 'other';
-
+            let points = 0;
             // 1 point for a walk over 45 mins or 3 km in distance.
             if (activity.activity_type && activity.activity_type.toLowerCase() === 'walk') {
                 if (activity.elapsed_time > (45 * 60) || activity.distance > 3000) {
-                    pointsEarned += 1;
-                    activityCategory = 'walk';
+                    points += 1;
+                    leaderboard[athleteName].walk += 1;
                 }
             }
             // 1 point for a run over 3 km.
             else if (activity.activity_type && activity.activity_type.toLowerCase() === 'run') {
                 if (activity.distance > 3000) {
-                    pointsEarned += 1;
-                    activityCategory = 'run';
+                    points += 1;
+                    leaderboard[athleteName].run += 1;
                 }
             }
             // Any football activity.
-            else if (activity.activity_type && activity.activity_type.toLowerCase().includes('football')) { // Assuming 'football' in type name
-                pointsEarned += 1;
-                activityCategory = 'football';
+            else if (activity.activity_type && activity.activity_type.toLowerCase().includes('football')) {
+                points += 1;
+                leaderboard[athleteName].football += 1;
             }
             // Any other activity if it is over 30 mins
             else if (activity.elapsed_time > (30 * 60)) {
-                pointsEarned += 1;
-                activityCategory = 'other';
+                points += 1;
+                leaderboard[athleteName].other += 1;
             }
-            
-            weeklyLeaderboard[weekString][activity.athlete_id].points.total += pointsEarned;
-            if (pointsEarned > 0) {
-                weeklyLeaderboard[weekString][activity.athlete_id].points[activityCategory] += 1;
-            }
+
+            leaderboard[athleteName].points += points;
         });
 
-        // Convert to a more consumable format: array of weeks, each with an array of athletes
-        const formattedLeaderboard = Object.keys(weeklyLeaderboard).sort((a, b) => new Date(b) - new Date(a)).map(weekString => {
-            const athletes = Object.values(weeklyLeaderboard[weekString]).sort((a, b) => b.points.total - a.points.total);
+        const leaderboardValues = Object.values(leaderboard);
+
+        const leaderboardWithSummary = leaderboardValues.map(athlete => {
+            const summaryParts = [];
+            if (athlete.walk > 0) summaryParts.push(`Walks: ${athlete.walk}`);
+            if (athlete.run > 0) summaryParts.push(`Runs: ${athlete.run}`);
+            if (athlete.football > 0) summaryParts.push(`Football: ${athlete.football}`);
+            if (athlete.other > 0) summaryParts.push(`Other: ${athlete.other}`);
+            
             return {
-                week: weekString,
-                athletes: athletes,
+                athlete_name: athlete.athlete_name,
+                points: athlete.points,
+                summary: summaryParts.join(', ')
             };
         });
 
-        res.json(formattedLeaderboard);
+        const leaderboardArray = leaderboardWithSummary.sort((a, b) => b.points - a.points);
 
+        res.json(leaderboardArray);
     } catch (error) {
-        console.error('Error generating weekly leaderboard:', error);
-        res.status(500).send('Internal Server Error');
+        console.error('Error fetching weekly leaderboard data:', error);
+        res.status(500).json({ error: 'Error fetching weekly leaderboard data' });
     }
 });
 
