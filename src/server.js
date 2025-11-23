@@ -62,19 +62,9 @@ app.get('/api/activities', async (req, res) => {
     }
 
     try {
-        const { data: mostRecentEntry, error: recentEntryError } = await supabase
-            .from('activities')
-            .select('start_date')
-            .order('start_date', { ascending: false })
-            .limit(1);
-
-        if (recentEntryError) {
-            console.error('Error fetching most recent entry:', recentEntryError);
-        }
-
-        const after = mostRecentEntry && mostRecentEntry.length > 0 ? Math.floor(new Date(mostRecentEntry[0].start_date).getTime() / 1000) : null;
-
-        const response = await fetch(`https://www.strava.com/api/v3/athlete/activities?access_token=${access_token}${after ? `&after=${after}` : ''}`, {
+        // Fetch the last 30 activities to catch any retrospectively added ones.
+        // The database's onConflict will handle duplicates.
+        const response = await fetch(`https://www.strava.com/api/v3/athlete/activities?access_token=${access_token}&page=1&per_page=30`, {
             headers: {
                 Authorization: `Bearer ${access_token}`,
             },
