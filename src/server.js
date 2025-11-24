@@ -85,15 +85,41 @@ app.get('/auth/strava/callback', async (req, res) => {
 });
 
 app.get('/api/activities', async (req, res) => {
-    const { access_token, athlete_name } = req.query;
+    const { access_token } = req.query;
 
     if (!access_token) {
         return res.status(401).send('Access token is missing.');
     }
 
     try {
-        // Fetch the last 30 activities to catch any retrospectively added ones.
-        // The database's onConflict will handle duplicates.
+        // Fetch the athlete's profile from Strava to ensure we have their timezone
+        const athleteResponse = await fetch('https://www.strava.com/api/v3/athlete', {
+            headers: {
+                Authorization: `Bearer ${access_token}`,
+            },
+        });
+        const athleteData = await athleteResponse.json();
+
+        if (!athleteData.id) {
+            return res.status(401).send('Invalid access token.');
+        }
+
+        // Upsert the athlete's profile to ensure it's in our database
+        const athleteProfile = {
+            id: athleteData.id,
+            firstname: athleteData.firstname,
+            lastname: athleteData.lastname,
+            profile_picture_url: athleteData.profile,
+            timezone: athleteData.timezone,
+        };
+        const { error: upsertError } = await supabase.from('profiles').upsert(athleteProfile, { onConflict: 'id' });
+
+        if (upsertError) {
+            console.error('Error upserting athlete profile during activity fetch:', upsertError);
+            // We can continue without this, but timezone features might not work for this user
+        }
+
+        // Fetch the last 30 activities
         const response = await fetch(`https://www.strava.com/api/v3/athlete/activities?access_token=${access_token}&page=1&per_page=30`, {
             headers: {
                 Authorization: `Bearer ${access_token}`,
@@ -104,6 +130,7 @@ app.get('/api/activities', async (req, res) => {
         let uploadedCount = 0;
 
         if (activities.length > 0) {
+            const athlete_name = `${athleteData.firstname} ${athleteData.lastname}`;
             const activitiesToInsert = activities.map(activity => ({
                 id: activity.id,
                 athlete_id: activity.athlete.id,
@@ -114,41 +141,17 @@ app.get('/api/activities', async (req, res) => {
                 start_date: activity.start_date,
                 activity_type: activity.type,
                 elevation_gain: activity.total_elevation_gain,
-                average_heartrate: activity.average_heartrate || null, // Strava might not always provide heart rate
+                average_heartrate: activity.average_heartrate || null,
                 total_photo_count: activity.total_photo_count || 0,
             }));
 
-            let result;
-            if (typeof supabase.from('activities').insert([]).onConflict === 'function') { // Check if onConflict is available
-                result = await supabase.from('activities').insert(activitiesToInsert).onConflict('id').doNothing().select('id'); // Select 'id' to get count
-            } else {
-                console.error('Error: onConflict is not a function. Falling back to manual conflict handling.');
-                // Manual conflict handling: Select existing IDs and filter out activities that already exist
-                const { data: existingActivities, error: selectError } = await supabase
-                    .from('activities')
-                    .select('id')
-                    .in('id', activitiesToInsert.map(a => a.id));
+            const { data, error } = await supabase.from('activities').upsert(activitiesToInsert, { onConflict: 'id' });
 
-                if (selectError) {
-                    console.error('Error checking for existing activities:', selectError);
-                    return res.status(500).json({ message: 'Failed to check for existing activities.', error: selectError.message });
-                }
-
-                const existingIds = new Set(existingActivities.map(a => a.id));
-                const newActivitiesToInsert = activitiesToInsert.filter(a => !existingIds.has(a.id));
-
-                if (newActivitiesToInsert.length > 0) {
-                    result = await supabase.from('activities').insert(newActivitiesToInsert).select('id'); // Select 'id' to get count
-                } else {
-                    result = { data: [], error: null }; // No new activities to insert
-                }
+            if (error) {
+                console.error('Error inserting activities into Supabase:', error);
+                return res.status(500).json({ message: 'Failed to store activities.', error: error.message });
             }
-
-            if (result.error) {
-                console.error('Error inserting activities into Supabase:', result.error);
-                return res.status(500).json({ message: 'Failed to store activities.', error: result.error.message });
-            }
-            uploadedCount = result.data ? result.data.length : 0;
+            uploadedCount = data ? data.length : 0;
         }
 
         if (uploadedCount > 0) {
