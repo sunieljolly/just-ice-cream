@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const fetch = require('node-fetch');
 const { createClient } = require('@supabase/supabase-js');
+const { zonedTimeToUtc, utcToZonedTime, format } = require('date-fns-tz');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -27,7 +28,8 @@ app.get('/auth/strava/callback', async (req, res) => {
     }
 
     try {
-        const response = await fetch('https://www.strava.com/oauth/token', {
+        // Exchange the authorization code for an access token
+        const tokenResponse = await fetch('https://www.strava.com/oauth/token', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -40,11 +42,39 @@ app.get('/auth/strava/callback', async (req, res) => {
             }),
         });
 
-        const data = await response.json();
+        const tokenData = await tokenResponse.json();
 
-        if (data.access_token) {
-            const athleteName = `${data.athlete.firstname} ${data.athlete.lastname}`;
-            res.redirect(`/?access_token=${data.access_token}&athlete_id=${data.athlete.id}&athlete_name=${encodeURIComponent(athleteName)}`);
+        if (tokenData.access_token) {
+            // Fetch the athlete's profile from Strava
+            const athleteResponse = await fetch('https://www.strava.com/api/v3/athlete', {
+                headers: {
+                    Authorization: `Bearer ${tokenData.access_token}`,
+                },
+            });
+            const athleteData = await athleteResponse.json();
+
+            // Prepare athlete data for upsert
+            const athleteProfile = {
+                id: athleteData.id,
+                firstname: athleteData.firstname,
+                lastname: athleteData.lastname,
+                profile_picture_url: athleteData.profile,
+                access_token: tokenData.access_token,
+                refresh_token: tokenData.refresh_token,
+                expires_at: tokenData.expires_at,
+                timezone: athleteData.timezone, // e.g. "(GMT-08:00) America/Los_Angeles"
+            };
+
+            // Upsert the athlete's profile into the 'profiles' table
+            const { error } = await supabase.from('profiles').upsert(athleteProfile, { onConflict: 'id' });
+
+            if (error) {
+                console.error('Error upserting athlete profile:', error);
+                return res.status(500).send('Failed to save athlete profile.');
+            }
+
+            const athleteName = `${athleteData.firstname} ${athleteData.lastname}`;
+            res.redirect(`/?access_token=${tokenData.access_token}&athlete_id=${athleteData.id}&athlete_name=${encodeURIComponent(athleteName)}`);
         } else {
             res.status(400).send('Failed to get access token.');
         }
@@ -190,75 +220,110 @@ app.get('/api/recent-activities', async (req, res) => {
 // Weekly Leaderboard
 app.get('/weekly-leaderboard', async (req, res) => {
     try {
-        // Helper function to get the start of the week (Monday)
-        const getStartOfWeek = (date = new Date()) => {
-            const d = new Date(date);
-            const day = d.getDay(); // 0=Sun, 1=Mon, ...
-            const diff = d.getDate() - day + (day === 0 ? -6 : 1); // adjust when day is sunday
-            const monday = new Date(d.setDate(diff));
-            monday.setHours(0, 0, 0, 0);
-            return monday;
-        }
+        // 1. Fetch activities from the last 9 days to cover all timezones
+        const nineDaysAgo = new Date();
+        nineDaysAgo.setDate(nineDaysAgo.getDate() - 9);
 
-        const weekQuery = req.query.week; // e.g., '2025-11-10'
-        const targetDate = weekQuery ? new Date(weekQuery) : new Date();
-
-        const startOfWeek = getStartOfWeek(targetDate);
-        const endOfWeek = new Date(startOfWeek);
-        endOfWeek.setDate(endOfWeek.getDate() + 7);
-
-        const { data, error } = await supabase
+        const { data: activities, error: activitiesError } = await supabase
             .from('activities')
             .select('*')
-            .gte('start_date', startOfWeek.toISOString())
-            .lt('start_date', endOfWeek.toISOString());
+            .gte('start_date', nineDaysAgo.toISOString());
 
-        if (error) {
-            throw error;
-        }
+        if (activitiesError) throw activitiesError;
+
+        // 2. Fetch all athlete profiles to get their timezones
+        const { data: profiles, error: profilesError } = await supabase
+            .from('profiles')
+            .select('id, timezone');
+
+        if (profilesError) throw profilesError;
+
+        // Create a map of athlete_id to timezone for easy lookup
+        const athleteTimezones = profiles.reduce((acc, profile) => {
+            // Strava timezone format is like "(GMT-08:00) America/Los_Angeles"
+            // We need to extract the "America/Los_Angeles" part.
+            const tz = profile.timezone.split(' ')[1];
+            if (tz) {
+                acc[profile.id] = tz;
+            }
+            return acc;
+        }, {});
 
         const leaderboard = {};
 
-        data.forEach(activity => {
-            const athleteName = activity.athlete_name;
-            if (!leaderboard[athleteName]) {
-                leaderboard[athleteName] = {
-                    athlete_name: athleteName,
-                    points: 0,
-                    walk: 0,
-                    run: 0,
-                    football: 0,
-                    other: 0,
-                };
+        // 3. Process each activity with the correct timezone
+        activities.forEach(activity => {
+            const athleteId = activity.athlete_id;
+            const athleteTimezone = athleteTimezones[athleteId];
+
+            if (!athleteTimezone) {
+                console.warn(`Timezone not found for athlete ${athleteId}. Skipping activity ${activity.id}.`);
+                return; // Skip this activity if we don't have a timezone for the athlete
             }
 
-            let points = 0;
-            // 1 point for a walk over 45 mins or 3 km in distance.
-            if (activity.activity_type && activity.activity_type.toLowerCase() === 'walk') {
-                if (activity.elapsed_time > (45 * 60) || activity.distance > 3000) {
-                    points += 1;
-                    leaderboard[athleteName].walk += 1;
-                }
-            }
-            // 1 point for a run over 3 km.
-            else if (activity.activity_type && activity.activity_type.toLowerCase() === 'run') {
-                if (activity.distance > 3000) {
-                    points += 1;
-                    leaderboard[athleteName].run += 1;
-                }
-            }
-            // Any football activity.
-            else if (activity.activity_type && activity.activity_type.toLowerCase().includes('football')) {
-                points += 1;
-                leaderboard[athleteName].football += 1;
-            }
-            // Any other activity if it is over 30 mins
-            else if (activity.elapsed_time > (30 * 60)) {
-                points += 1;
-                leaderboard[athleteName].other += 1;
+            // Convert the activity's UTC start_date to the athlete's local time
+            const activityStartDate = new Date(activity.start_date);
+            const zonedActivityDate = utcToZonedTime(activityStartDate, athleteTimezone);
+
+            // Determine the start of the week (Monday) in the athlete's timezone
+            const getStartOfWeek = (date, timeZone) => {
+                const d = utcToZonedTime(date, timeZone);
+                const day = d.getDay(); // 0=Sun, 1=Mon, ...
+                const diff = d.getDate() - day + (day === 0 ? -6 : 1); // adjust when day is sunday
+                const monday = new Date(d.setDate(diff));
+                monday.setHours(0, 0, 0, 0);
+                return zonedTimeToUtc(monday, timeZone); // Convert back to UTC for comparison
             }
 
-            leaderboard[athleteName].points += points;
+            const weekQuery = req.query.week; // e.g., '2025-11-10'
+            const targetDate = weekQuery ? new Date(weekQuery) : new Date();
+
+            const startOfWeek = getStartOfWeek(targetDate, athleteTimezone);
+            const endOfWeek = new Date(startOfWeek);
+            endOfWeek.setDate(endOfWeek.getDate() + 7);
+
+            // Check if the activity falls within the current week in the athlete's timezone
+            if (activityStartDate >= startOfWeek && activityStartDate < endOfWeek) {
+                const athleteName = activity.athlete_name;
+                if (!leaderboard[athleteName]) {
+                    leaderboard[athleteName] = {
+                        athlete_name: athleteName,
+                        points: 0,
+                        walk: 0,
+                        run: 0,
+                        football: 0,
+                        other: 0,
+                    };
+                }
+
+                let points = 0;
+                // 1 point for a walk over 45 mins or 3 km in distance.
+                if (activity.activity_type && activity.activity_type.toLowerCase() === 'walk') {
+                    if (activity.elapsed_time > (45 * 60) || activity.distance > 3000) {
+                        points += 1;
+                        leaderboard[athleteName].walk += 1;
+                    }
+                }
+                // 1 point for a run over 3 km.
+                else if (activity.activity_type && activity.activity_type.toLowerCase() === 'run') {
+                    if (activity.distance > 3000) {
+                        points += 1;
+                        leaderboard[athleteName].run += 1;
+                    }
+                }
+                // Any football activity.
+                else if (activity.activity_type && activity.activity_type.toLowerCase().includes('football')) {
+                    points += 1;
+                    leaderboard[athleteName].football += 1;
+                }
+                // Any other activity if it is over 30 mins
+                else if (activity.elapsed_time > (30 * 60)) {
+                    points += 1;
+                    leaderboard[athleteName].other += 1;
+                }
+
+                leaderboard[athleteName].points += points;
+            }
         });
 
         const leaderboardValues = Object.values(leaderboard);
