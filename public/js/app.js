@@ -91,7 +91,7 @@ document.addEventListener('DOMContentLoaded', () => {
             recentActivitiesList.innerHTML = '';
 
             const activitiesByWeek = data.reduce((acc, activity) => {
-                const activityDate = new Date(activity.start_date);
+                const activityDate = new Date(activity.start_date_local);
                 const mondayOfWeek = getMondayOfWeek(activityDate);
                 const weekString = mondayOfWeek.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
@@ -135,7 +135,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     //<p>Photos: ${activity.total_photo_count}</p>
 
-                    
+
                     weekActivitiesContainer.appendChild(activityCard);
                 });
                 recentActivitiesList.appendChild(weekActivitiesContainer);

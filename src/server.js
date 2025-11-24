@@ -132,13 +132,6 @@ app.get('/api/activities', async (req, res) => {
         if (activities.length > 0) {
             const athlete_name = `${athleteData.firstname} ${athleteData.lastname}`;
             const activitiesToInsert = activities.map(activity => {
-                let startDateLocal = activity.start_date_local;
-                if (!startDateLocal && activity.start_date && activity.utc_offset) {
-                    const startDate = new Date(activity.start_date);
-                    const localDate = new Date(startDate.getTime() + activity.utc_offset * 1000);
-                    startDateLocal = localDate.toISOString();
-                }
-
                 return {
                     id: activity.id,
                     athlete_id: activity.athlete.id,
@@ -146,8 +139,7 @@ app.get('/api/activities', async (req, res) => {
                     name: activity.name,
                     distance: activity.distance,
                     elapsed_time: activity.elapsed_time,
-                    start_date: activity.start_date,
-                    start_date_local: startDateLocal,
+                    start_date_local: activity.start_date_local,
                     activity_type: activity.type,
                     elevation_gain: activity.total_elevation_gain,
                     average_heartrate: activity.average_heartrate || null,
@@ -155,7 +147,7 @@ app.get('/api/activities', async (req, res) => {
                 };
             });
 
-            const { data, error } = await supabase.from('activities').upsert(activitiesToInsert, { onConflict: 'id' });
+            const { data, error } = await supabase.from('activities').upsert(activitiesToInsert, { onConflict: 'id' }).select();
 
             if (error) {
                 console.error('Error inserting activities into Supabase:', error);
@@ -214,8 +206,8 @@ app.get('/api/recent-activities', async (req, res) => {
     try {
         const { data: recentActivities, error } = await supabase
             .from('activities')
-            .select('id, athlete_name, name, distance, elapsed_time, start_date, start_date_local, activity_type, elevation_gain, average_heartrate, total_photo_count')
-            .order('start_date', { ascending: false })
+            .select('id, athlete_name, name, distance, elapsed_time, start_date_local, activity_type, elevation_gain, average_heartrate, total_photo_count')
+            .order('start_date_local', { ascending: false })
             .limit(10); // Fetch the 10 most recent activities
 
         if (error) {
@@ -257,7 +249,7 @@ app.get('/weekly-leaderboard', async (req, res) => {
         const { data: activities, error: activitiesError } = await supabase
             .from('activities')
             .select('*')
-            .gte('start_date', nineDaysAgo.toISOString());
+            .gte('start_date_local', nineDaysAgo.toISOString());
 
         if (activitiesError) throw activitiesError;
 
