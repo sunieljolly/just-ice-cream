@@ -253,7 +253,17 @@ navWeeklyLeaderboard.addEventListener('click', (e) => {
 const fetchAndDisplayOverallLeaderboard = async () => {
     try {
         const response = await fetch('/api/overall-leaderboard');
-        const data = await response.json();
+        const rawData = await response.json();
+
+        const data = rawData.map(athlete => {
+            const walkPace = athlete.total_walk_distance > 0 ? athlete.total_walk_time / (athlete.total_walk_distance / 1000) : 0;
+            const runPace = athlete.total_run_distance > 0 ? athlete.total_run_time / (athlete.total_run_distance / 1000) : 0;
+            return {
+                ...athlete,
+                walk_pace: walkPace,
+                run_pace: runPace,
+            };
+        });
 
         let sortColumn = 'total_activities';
         let sortDirection = 'desc';
@@ -279,8 +289,10 @@ const fetchAndDisplayOverallLeaderboard = async () => {
                         <th data-sort="athlete_name" style="cursor: pointer;">Athlete</th>
                         <th data-sort="total_walk_distance" style="cursor: pointer;">Walk Distance</th>
                         <th data-sort="total_walk_time" style="cursor: pointer;">Walk Time</th>
+                        <th data-sort="walk_pace" style="cursor: pointer;">Walk Pace</th>
                         <th data-sort="total_run_distance" style="cursor: pointer;">Run Distance</th>
                         <th data-sort="total_run_time" style="cursor: pointer;">Run Time</th>
+                        <th data-sort="run_pace" style="cursor: pointer;">Run Pace</th>
                         <th data-sort="total_weight_training_time" style="cursor: pointer;">Weight Training Time</th>
                         <th data-sort="total_soccer_time" style="cursor: pointer;">Soccer Time</th>
                         <th data-sort="total_activities" style="cursor: pointer;">Total Activities</th>
@@ -293,8 +305,10 @@ const fetchAndDisplayOverallLeaderboard = async () => {
                             <td>${row.athlete_name}</td>
                             <td>${(row.total_walk_distance / 1000).toFixed(2)} km</td>
                             <td>${formatTime(row.total_walk_time)}</td>
+                            <td>${calculatePace(row.total_walk_distance, row.total_walk_time)}</td>
                             <td>${(row.total_run_distance / 1000).toFixed(2)} km</td>
                             <td>${formatTime(row.total_run_time)}</td>
+                            <td>${calculatePace(row.total_run_distance, row.total_run_time)}</td>
                             <td>${formatTime(row.total_weight_training_time)}</td>
                             <td>${formatTime(row.total_soccer_time)}</td>
                             <td>${row.total_activities}</td>
@@ -391,5 +405,21 @@ navOverallLeaderboard.addEventListener('click', (e) => {
         } else {
             return null;
         }
+    }
+
+    function calculatePace(distance, time) {
+        if (distance === 0 || time === 0) {
+            return 'N/A';
+        }
+        const distanceInKm = distance / 1000;
+        const timeInMinutes = time / 60;
+        const paceInMinutesPerKm = timeInMinutes / distanceInKm;
+
+        const minutes = Math.floor(paceInMinutesPerKm);
+        const seconds = Math.round((paceInMinutesPerKm - minutes) * 60);
+
+        const pad = (num) => num < 10 ? '0' + num : num;
+
+        return `${pad(minutes)}:${pad(seconds)} /km`;
     }
 });
