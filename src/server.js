@@ -131,19 +131,29 @@ app.get('/api/activities', async (req, res) => {
 
         if (activities.length > 0) {
             const athlete_name = `${athleteData.firstname} ${athleteData.lastname}`;
-            const activitiesToInsert = activities.map(activity => ({
-                id: activity.id,
-                athlete_id: activity.athlete.id,
-                athlete_name: athlete_name,
-                name: activity.name,
-                distance: activity.distance,
-                elapsed_time: activity.elapsed_time,
-                start_date: activity.start_date,
-                activity_type: activity.type,
-                elevation_gain: activity.total_elevation_gain,
-                average_heartrate: activity.average_heartrate || null,
-                total_photo_count: activity.total_photo_count || 0,
-            }));
+            const activitiesToInsert = activities.map(activity => {
+                let startDateLocal = activity.start_date_local;
+                if (!startDateLocal && activity.start_date && activity.utc_offset) {
+                    const startDate = new Date(activity.start_date);
+                    const localDate = new Date(startDate.getTime() + activity.utc_offset * 1000);
+                    startDateLocal = localDate.toISOString();
+                }
+
+                return {
+                    id: activity.id,
+                    athlete_id: activity.athlete.id,
+                    athlete_name: athlete_name,
+                    name: activity.name,
+                    distance: activity.distance,
+                    elapsed_time: activity.elapsed_time,
+                    start_date: activity.start_date,
+                    start_date_local: startDateLocal,
+                    activity_type: activity.type,
+                    elevation_gain: activity.total_elevation_gain,
+                    average_heartrate: activity.average_heartrate || null,
+                    total_photo_count: activity.total_photo_count || 0,
+                };
+            });
 
             const { data, error } = await supabase.from('activities').upsert(activitiesToInsert, { onConflict: 'id' });
 
@@ -204,7 +214,7 @@ app.get('/api/recent-activities', async (req, res) => {
     try {
         const { data: recentActivities, error } = await supabase
             .from('activities')
-            .select('id, athlete_name, name, distance, elapsed_time, start_date, activity_type, elevation_gain, average_heartrate, total_photo_count')
+            .select('id, athlete_name, name, distance, elapsed_time, start_date, start_date_local, activity_type, elevation_gain, average_heartrate, total_photo_count')
             .order('start_date', { ascending: false })
             .limit(10); // Fetch the 10 most recent activities
 
@@ -223,7 +233,24 @@ app.get('/api/recent-activities', async (req, res) => {
 // Weekly Leaderboard
 app.get('/weekly-leaderboard', async (req, res) => {
     try {
-        // 1. Fetch activities from the last 9 days to cover all timezones
+        // Helper function to get the start of the week (Monday) based on a local date
+        const getStartOfWeek = (date) => {
+            const d = new Date(date);
+            const day = d.getDay(); // 0=Sun, 1=Mon, ...
+            const diff = d.getDate() - day + (day === 0 ? -6 : 1); // adjust when day is sunday
+            const monday = new Date(d.setDate(diff));
+            monday.setHours(0, 0, 0, 0);
+            return monday;
+        };
+
+        const weekQuery = req.query.week; // e.g., '2025-11-10'
+        const targetDate = weekQuery ? new Date(weekQuery) : new Date();
+
+        const startOfWeek = getStartOfWeek(targetDate);
+        const endOfWeek = new Date(startOfWeek);
+        endOfWeek.setDate(endOfWeek.getDate() + 7);
+
+        // Fetch activities from the last 9 days to be safe
         const nineDaysAgo = new Date();
         nineDaysAgo.setDate(nineDaysAgo.getDate() - 9);
 
@@ -234,98 +261,80 @@ app.get('/weekly-leaderboard', async (req, res) => {
 
         if (activitiesError) throw activitiesError;
 
-        // 2. Fetch all athlete profiles to get their timezones
+        // Fetch all profiles to get profile pictures
         const { data: profiles, error: profilesError } = await supabase
             .from('profiles')
-            .select('id, timezone');
+            .select('id, firstname, lastname, profile_picture_url');
 
         if (profilesError) throw profilesError;
 
-        // Create a map of athlete_id to timezone for easy lookup
-        const athleteTimezones = profiles.reduce((acc, profile) => {
-            // Strava timezone format is like "(GMT-08:00) America/Los_Angeles"
-            // We need to extract the "America/Los_Angeles" part.
-            const tz = profile.timezone.split(' ')[1];
-            if (tz) {
-                acc[profile.id] = tz;
-            }
+        const profilesMap = profiles.reduce((acc, profile) => {
+            acc[profile.id] = {
+                name: `${profile.firstname} ${profile.lastname}`,
+                profile_picture_url: profile.profile_picture_url,
+            };
             return acc;
         }, {});
 
         const leaderboard = {};
 
-        // 3. Process each activity with the correct timezone
         activities.forEach(activity => {
-            const athleteId = activity.athlete_id;
-            const athleteTimezone = athleteTimezones[athleteId];
-
-            if (!athleteTimezone) {
-                console.warn(`Timezone not found for athlete ${athleteId}. Skipping activity ${activity.id}.`);
-                return; // Skip this activity if we don't have a timezone for the athlete
+            if (!activity.start_date_local) {
+                console.warn(`Activity ${activity.id} is missing start_date_local. Skipping.`);
+                return;
             }
 
-            // Convert the activity's UTC start_date to the athlete's local time
-            const activityStartDate = new Date(activity.start_date);
-            const zonedActivityDate = utcToZonedTime(activityStartDate, athleteTimezone);
+            const activityLocalDate = new Date(activity.start_date_local);
 
-            // Determine the start of the week (Monday) in the athlete's timezone
-            const getStartOfWeek = (date, timeZone) => {
-                const d = utcToZonedTime(date, timeZone);
-                const day = d.getDay(); // 0=Sun, 1=Mon, ...
-                const diff = d.getDate() - day + (day === 0 ? -6 : 1); // adjust when day is sunday
-                const monday = new Date(d.setDate(diff));
-                monday.setHours(0, 0, 0, 0);
-                return zonedTimeToUtc(monday, timeZone); // Convert back to UTC for comparison
-            }
-
-            const weekQuery = req.query.week; // e.g., '2025-11-10'
-            const targetDate = weekQuery ? new Date(weekQuery) : new Date();
-
-            const startOfWeek = getStartOfWeek(targetDate, athleteTimezone);
-            const endOfWeek = new Date(startOfWeek);
-            endOfWeek.setDate(endOfWeek.getDate() + 7);
-
-            // Check if the activity falls within the current week in the athlete's timezone
-            if (activityStartDate >= startOfWeek && activityStartDate < endOfWeek) {
-                const athleteName = activity.athlete_name;
-                if (!leaderboard[athleteName]) {
-                    leaderboard[athleteName] = {
-                        athlete_name: athleteName,
+            if (activityLocalDate >= startOfWeek && activityLocalDate < endOfWeek) {
+                const athleteId = activity.athlete_id;
+                if (!leaderboard[athleteId]) {
+                    leaderboard[athleteId] = {
+                        athlete_id: athleteId,
+                        athlete_name: profilesMap[athleteId] ? profilesMap[athleteId].name : activity.athlete_name,
+                        profile_picture_url: profilesMap[athleteId] ? profilesMap[athleteId].profile_picture_url : null,
                         points: 0,
                         walk: 0,
                         run: 0,
-                        football: 0,
+                        soccer: 0,
+                        weighttraining: 0,
                         other: 0,
                     };
                 }
 
                 let points = 0;
-                // 1 point for a walk over 45 mins or 3 km in distance.
                 if (activity.activity_type && activity.activity_type.toLowerCase() === 'walk') {
                     if (activity.elapsed_time > (45 * 60) || activity.distance > 3000) {
                         points += 1;
-                        leaderboard[athleteName].walk += 1;
+                        leaderboard[athleteId].walk += 1;
                     }
                 }
-                // 1 point for a run over 3 km.
                 else if (activity.activity_type && activity.activity_type.toLowerCase() === 'run') {
                     if (activity.distance > 3000) {
                         points += 1;
-                        leaderboard[athleteName].run += 1;
+                        leaderboard[athleteId].run += 1;
                     }
                 }
-                // Any football activity.
-                else if (activity.activity_type && activity.activity_type.toLowerCase().includes('football')) {
+                else if (activity.activity_type && activity.activity_type.toLowerCase().includes('soccer')) {
+                    if (activity.elapsed_time > (30 * 60)){
                     points += 1;
-                    leaderboard[athleteName].football += 1;
+                    leaderboard[athleteId].soccer += 1;
+                    }
+
                 }
-                // Any other activity if it is over 30 mins
-                else if (activity.elapsed_time > (30 * 60)) {
+                else if (activity.activity_type && activity.activity_type.toLowerCase().includes('weighttraining')) {
+                    if (activity.elapsed_time > (30 * 60)){
                     points += 1;
-                    leaderboard[athleteName].other += 1;
+                    leaderboard[athleteId].weighttraining += 1;
+                    }
+
                 }
 
-                leaderboard[athleteName].points += points;
+                else if (activity.elapsed_time > (30 * 60)) {
+                    points += 1;
+                    leaderboard[athleteId].other += 1;
+                }
+                leaderboard[athleteId].points += points;
             }
         });
 
@@ -335,11 +344,13 @@ app.get('/weekly-leaderboard', async (req, res) => {
             const summaryParts = [];
             if (athlete.walk > 0) summaryParts.push(`Walks: ${athlete.walk}`);
             if (athlete.run > 0) summaryParts.push(`Runs: ${athlete.run}`);
-            if (athlete.football > 0) summaryParts.push(`Football: ${athlete.football}`);
+            if (athlete.soccer > 0) summaryParts.push(`Soccer: ${athlete.soccer}`);
             if (athlete.other > 0) summaryParts.push(`Other: ${athlete.other}`);
+            if (athlete.weighttraining > 0) summaryParts.push(`Weight Training: ${athlete.weighttraining}`);
             
             return {
                 athlete_name: athlete.athlete_name,
+                profile_picture_url: athlete.profile_picture_url,
                 points: athlete.points,
                 summary: summaryParts.join(', ')
             };

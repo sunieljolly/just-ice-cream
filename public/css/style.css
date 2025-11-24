@@ -193,6 +193,11 @@ footer {
     gap: 20px;
     min-width: 100%;
     max-width: 600px;
+ 
+}
+
+.personal-best {
+    border: 2px solid #fceb02;
 }
 
 .activity-card {
@@ -204,7 +209,7 @@ footer {
     flex-direction: column;
     justify-content: space-between;
     max-width: 600px; /* Limit card width for better readability on desktop */
-    width: 100%; /* Ensure it takes full width up to max-width */
+    width: 90%; /* Ensure it takes full width up to max-width */
 }
 
 .activity-card strong {
@@ -256,4 +261,17 @@ footer {
 
 .week-navigation h3 {
     margin: 0;
+}
+
+.badge {
+    display: inline-block;
+    padding: 0.25em 0.4em;
+    font-size: 75%;
+    font-weight: 700;
+    line-height: 1;
+    text-align: center;
+    white-space: nowrap;
+    vertical-align: baseline;
+    border-radius: 0.25rem;
+    color: #fff;
 }

@@ -111,7 +111,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 weekActivitiesContainer.classList.add('recent-activities-grid'); // Reuse the grid class
                 activitiesByWeek[weekString].forEach(activity => {
                     const activityCard = document.createElement('div');
+                    
+                    if(activity.name.includes("PB")){
+                         activityCard.classList.add('personal-best');
+                    } 
+
                     activityCard.classList.add('activity-card');
+
+                    const heartRateZone = getHeartRateZone(activity.average_heartrate);
+                    const heartRateBadge = heartRateZone ? `<span class="badge" style="background-color: ${heartRateZone.color};">${heartRateZone.name}</span>` : '';
+
                     activityCard.innerHTML = `
                         <strong>${activity.name}</strong>
                         <p>by ${activity.athlete_name}</p>
@@ -119,10 +128,14 @@ document.addEventListener('DOMContentLoaded', () => {
                         <p>Distance: ${(activity.distance / 1000).toFixed(2)} km</p>
                         <p>Time: ${formatTime(activity.elapsed_time)}</p>
                         <p>Elevation Gain: ${activity.elevation_gain ? activity.elevation_gain.toFixed(0) + ' m' : 'N/A'}</p>
-                        <p>Avg Heart Rate: ${activity.average_heartrate ? activity.average_heartrate.toFixed(0) + ' bpm' : 'N/A'}</p>
-                        <p>Photos: ${activity.total_photo_count}</p>
-                        <p>Date: ${new Date(activity.start_date).toLocaleDateString()}</p>
+                        <p>Avg Heart Rate: ${activity.average_heartrate ? activity.average_heartrate.toFixed(0) + ' bpm' : 'N/A'} ${heartRateBadge}</p>
+                        
+                        <p>Date: ${new Date(activity.start_date_local).toLocaleDateString()}</p>
                     `;
+
+                    //<p>Photos: ${activity.total_photo_count}</p>
+
+                    
                     weekActivitiesContainer.appendChild(activityCard);
                 });
                 recentActivitiesList.appendChild(weekActivitiesContainer);
@@ -201,6 +214,7 @@ const fetchAndDisplayWeeklyLeaderboard = async (date) => {
             <thead>
                 <tr>
                     <th>Rank</th>
+                    <th></th>
                     <th>Athlete</th>
                     <th>Points</th>
                     <th>Summary</th>
@@ -210,6 +224,7 @@ const fetchAndDisplayWeeklyLeaderboard = async (date) => {
                 ${data.map((row, index) => `
                     <tr>
                         <td>${index + 1}</td>
+                        <td>${row.profile_picture_url ? `<img src="${row.profile_picture_url}" alt="${row.athlete_name}" style="width: 40px; height: 40px; border-radius: 50%;">` : ''}</td>
                         <td>${row.athlete_name}</td>
                         <td>${row.points}</td>
                         <td>${row.summary}</td>
@@ -273,5 +288,23 @@ navWeeklyLeaderboard.addEventListener('click', (e) => {
         const monday = new Date(d.setDate(diff));
         monday.setHours(0, 0, 0, 0); // Set to start of the day (local time)
         return monday;
+    }
+
+    function getHeartRateZone(hr) {
+        if (!hr) return null;
+
+        if (hr >= 160 && hr <= 178) {
+            return { name: 'VO2 Max', color: '#d10000' }; // Red
+        } else if (hr >= 142 && hr <= 159) {
+            return { name: 'Anaerobic', color: '#ff4500' }; // OrangeRed
+        } else if (hr >= 125 && hr <= 141) {
+            return { name: 'Aerobic', color: '#2e8b57' }; // SeaGreen
+        } else if (hr >= 107 && hr <= 124) {
+            return { name: 'Fat Burn', color: '#4682b4' }; // SteelBlue
+        } else if (hr >= 89 && hr <= 106) {
+            return { name: 'Warm Up', color: '#6a5acd' }; // SlateBlue
+        } else {
+            return null;
+        }
     }
 });
