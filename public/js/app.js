@@ -10,12 +10,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const uploadActivitiesPage = document.getElementById('upload-activities-page');
     const recentActivitiesPage = document.getElementById('recent-activities-page');
     const weeklyLeaderboardPage = document.getElementById('weekly-leaderboard-page');
+    const overallLeaderboardPage = document.getElementById('overall-leaderboard-page');
 
 
     const navHome = document.getElementById('nav-home');
     const navUploadActivities = document.getElementById('nav-upload-activities');
     const navRecentActivities = document.getElementById('nav-recent-activities');
     const navWeeklyLeaderboard = document.getElementById('nav-weekly-leaderboard');
+    const navOverallLeaderboard = document.getElementById('nav-overall-leaderboard');
 
 
     const authStravaButton = document.getElementById('connect-strava-button');
@@ -23,6 +25,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const uploadInstructions = document.getElementById('upload-instructions');
     const recentActivitiesList = document.getElementById('recent-activities-list');
     const weeklyLeaderboardContent = document.getElementById('weekly-leaderboard-content');
+    const overallLeaderboardContent = document.getElementById('overall-leaderboard-content');
 
 
     const urlParams = new URLSearchParams(window.location.search);
@@ -55,6 +58,7 @@ document.addEventListener('DOMContentLoaded', () => {
         uploadActivitiesPage.style.display = 'none';
         recentActivitiesPage.style.display = 'none';
         weeklyLeaderboardPage.style.display = 'none';
+        overallLeaderboardPage.style.display = 'none';
 
         pageToShow.style.display = 'block';
 
@@ -213,8 +217,8 @@ const fetchAndDisplayWeeklyLeaderboard = async (date) => {
         table.innerHTML = `
             <thead>
                 <tr>
-                    <th>Rank</th>
                     <th></th>
+                    <th>Rank</th>  
                     <th>Athlete</th>
                     <th>Points</th>
                     <th>Summary</th>
@@ -222,9 +226,9 @@ const fetchAndDisplayWeeklyLeaderboard = async (date) => {
             </thead>
             <tbody>
                 ${data.map((row, index) => `
-                    <tr>
-                        <td>${index + 1}</td>
+                    <tr>                       
                         <td>${row.profile_picture_url ? `<img src="${row.profile_picture_url}" alt="${row.athlete_name}" style="width: 40px; height: 40px; border-radius: 50%;">` : ''}</td>
+                         <td>${index + 1}</td>
                         <td>${row.athlete_name}</td>
                         <td>${row.points}</td>
                         <td>${row.summary}</td>
@@ -244,6 +248,87 @@ navWeeklyLeaderboard.addEventListener('click', (e) => {
     showPage(weeklyLeaderboardPage);
     currentWeekDate = new Date(); // Reset to current week
     fetchAndDisplayWeeklyLeaderboard(currentWeekDate);
+});
+
+const fetchAndDisplayOverallLeaderboard = async () => {
+    try {
+        const response = await fetch('/api/overall-leaderboard');
+        const data = await response.json();
+
+        let sortColumn = 'total_activities';
+        let sortDirection = 'desc';
+
+        const renderTable = () => {
+            overallLeaderboardContent.innerHTML = '';
+
+            const sortedData = [...data].sort((a, b) => {
+                if (a[sortColumn] < b[sortColumn]) {
+                    return sortDirection === 'asc' ? -1 : 1;
+                }
+                if (a[sortColumn] > b[sortColumn]) {
+                    return sortDirection === 'asc' ? 1 : -1;
+                }
+                return 0;
+            });
+
+            const table = document.createElement('table');
+            table.innerHTML = `
+                <thead>
+                    <tr>
+                        <th></th>
+                        <th data-sort="athlete_name" style="cursor: pointer;">Athlete</th>
+                        <th data-sort="total_walk_distance" style="cursor: pointer;">Walk Distance</th>
+                        <th data-sort="total_walk_time" style="cursor: pointer;">Walk Time</th>
+                        <th data-sort="total_run_distance" style="cursor: pointer;">Run Distance</th>
+                        <th data-sort="total_run_time" style="cursor: pointer;">Run Time</th>
+                        <th data-sort="total_weight_training_time" style="cursor: pointer;">Weight Training Time</th>
+                        <th data-sort="total_soccer_time" style="cursor: pointer;">Soccer Time</th>
+                        <th data-sort="total_activities" style="cursor: pointer;">Total Activities</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${sortedData.map(row => `
+                        <tr>
+                            <td>${row.profile_picture_url ? `<img src="${row.profile_picture_url}" alt="${row.athlete_name}" style="width: 40px; height: 40px; border-radius: 50%;">` : ''}</td>
+                            <td>${row.athlete_name}</td>
+                            <td>${(row.total_walk_distance / 1000).toFixed(2)} km</td>
+                            <td>${formatTime(row.total_walk_time)}</td>
+                            <td>${(row.total_run_distance / 1000).toFixed(2)} km</td>
+                            <td>${formatTime(row.total_run_time)}</td>
+                            <td>${formatTime(row.total_weight_training_time)}</td>
+                            <td>${formatTime(row.total_soccer_time)}</td>
+                            <td>${row.total_activities}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            `;
+            overallLeaderboardContent.appendChild(table);
+
+            table.querySelectorAll('th[data-sort]').forEach(th => {
+                th.addEventListener('click', () => {
+                    const newSortColumn = th.dataset.sort;
+                    if (sortColumn === newSortColumn) {
+                        sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        sortColumn = newSortColumn;
+                        sortDirection = 'desc';
+                    }
+                    renderTable();
+                });
+            });
+        };
+
+        renderTable();
+    } catch (error) {
+        console.error('Error fetching overall leaderboard:', error);
+        alert('Failed to fetch overall leaderboard.');
+    }
+};
+
+navOverallLeaderboard.addEventListener('click', (e) => {
+    e.preventDefault();
+    showPage(overallLeaderboardPage);
+    fetchAndDisplayOverallLeaderboard();
 });
 
 

@@ -1,93 +1,114 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Just Ice Cream</title>
-    <link rel="stylesheet" href="css/style.css">
-</head>
-<body>
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+  <body>
     <header>
-        <nav>
-            <h1>🍦</h1>
-            <button class="menu-toggle" aria-label="Toggle navigation">
-                <span class="hamburger"></span>
-            </button>
-          
+      <nav>
+        <h1>🍦</h1>
+        <button class="menu-toggle" aria-label="Toggle navigation">
+          <span class="hamburger"></span>
+        </button>
 
-            <ul class="nav-links">
-                <li><a href="#" id="nav-home">Home</a></li>
-                <li><a href="#" id="nav-upload-activities">Upload Activities</a></li>
-                <li><a href="#" id="nav-recent-activities">Recent Activities</a></li>
-                <li><a href="#" id="nav-weekly-leaderboard">Weekly Leaderboard</a></li>
-
-            </ul>
-        </nav>
+        <ul class="nav-links">
+          <li><a href="#" id="nav-home">Home</a></li>
+          <li><a href="#" id="nav-upload-activities">Upload Activities</a></li>
+          <li><a href="#" id="nav-recent-activities">Recent Activities</a></li>
+          <li>
+            <a href="#" id="nav-weekly-leaderboard">Weekly Leaderboard</a>
+          </li>
+            <li>
+            <a href="#" id="overall-leaderboard">Overall Leaderboard 🔒</a>
+          </li>
+        </ul>
+      </nav>
     </header>
 
     <main>
-        <section id="home-page" class="page active">
-            <div class="container">
-                <h2>Welcome to the Club</h2>
-                <p>Connect and sync with Strava to compete in a different kind of league</p>
-            </div>
-        </section>
+      <section id="home-page" class="page active">
+        <div class="container">
+          <h2>Welcome to the Club</h2>
+          <p>
+            Connect and sync with Strava to compete in a different kind of
+            league
+          </p>
+        </div>
+      </section>
 
-        <section id="upload-activities-page" class="page" style="display: none;">
-            <div class="container">
-                <h2>Upload Your Strava Activities</h2>
-                <div id="upload-instructions">
-                    <!-- Instructions will be dynamically loaded here -->
-                </div>
-                <a href="/auth/strava" id="connect-strava-button" class="btn">Connect to Strava</a>
-                <button id="upload-button" class="btn" style="display: none;">Upload Activities</button>
-            </div>
-        </section>
+      <section id="upload-activities-page" class="page" style="display: none">
+        <div class="container">
+          <h2>Upload Your Strava Activities</h2>
+          <div id="upload-instructions">
+            <!-- Instructions will be dynamically loaded here -->
+          </div>
+          <a href="/auth/strava" id="connect-strava-button" class="btn"
+            >Connect to Strava</a
+          >
+          <button id="upload-button" class="btn" style="display: none">
+            Upload Activities
+          </button>
+        </div>
+      </section>
 
-        <section id="recent-activities-page" class="page" style="display: none;">
-            <div class="container">
-                <h2>Your Recent Activities</h2>
-                <div id="recent-activities-list" class="recent-activities-grid">
-                    <!-- Recent activities will be loaded here as cards -->
-                </div>
-            </div>
-        </section>
+      <section id="recent-activities-page" class="page" style="display: none">
+        <div class="container">
+          <h2>Your Recent Activities</h2>
+          <div id="recent-activities-list" class="recent-activities-grid">
+                    <div class="loader">Loading...</div>
+            <!-- Recent activities will be loaded here as cards -->
+             
+          </div>
+        </div>
+      </section>
 
-        <section id="weekly-leaderboard-page" class="page" style="display: none;">
-            <div class="container">
-                <h2>Weekly Leaderboard</h2>
-                <div id="weekly-leaderboard-content">
-                    <!-- Weekly leaderboard data will be inserted here -->
-                </div>
-            </div>
-        </section>
+      <section id="weekly-leaderboard-page" class="page" style="display: none">
+        <div class="container">
+          <h2>Weekly Leaderboard</h2>
+          <div id="weekly-leaderboard-content">
+            <div class="loader">Loading...</div>
+            <!-- Weekly leaderboard data will be inserted here -->
+          </div>
+        </div>
+      </section>
 
-        <section id="leaderboard-page" class="page" style="display: none;">
-            <div class="container">
-                <h2>Leaderboard</h2>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Athlete Name</th>
-                            <th>Number of Activities</th>
-                            <th>Distance Covered (km)</th>
-                            <th>Time Taken</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <!-- Leaderboard data will be inserted here -->
-                    </tbody>
-                </table>
-            </div>
-        </section>
+      <section id="leaderboard-page" class="page" style="display: none">
+        <div class="container">
+          <h2>Leaderboard</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Athlete Name</th>
+                <th>Number of Activities</th>
+                <th>Distance Covered (km)</th>
+                <th>Time Taken</th>
+              </tr>
+            </thead>
+            <tbody>
+              <!-- Leaderboard data will be inserted here -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+      <section id="overall-leaderboard-page" style="display: none">
+        <div class="container">
+          <h2>Overall Leaderboard</h2>
+          <div id="overall-leaderboard-content">
+            <div class="loader">Loading...</div>
+          </div>
+        </div>
+      </section>
     </main>
 
     <footer>
-        <div class="container">
-            <p>&copy; 2025 Just Ice Cream v1.4</p>
-        </div>
+      <div class="container">
+        <p>&copy; 2025 Just Ice Cream v1.4</p>
+      </div>
     </footer>
 
     <script src="js/app.js"></script>
-</body>
+  </body>
 </html>

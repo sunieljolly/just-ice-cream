@@ -357,6 +357,72 @@ app.get('/weekly-leaderboard', async (req, res) => {
     }
 });
 
+app.get('/api/overall-leaderboard', async (req, res) => {
+    try {
+        const { data: activities, error: activitiesError } = await supabase
+            .from('activities')
+            .select('*');
+
+        if (activitiesError) throw activitiesError;
+
+        const { data: profiles, error: profilesError } = await supabase
+            .from('profiles')
+            .select('id, firstname, lastname, profile_picture_url');
+
+        if (profilesError) throw profilesError;
+
+        const profilesMap = profiles.reduce((acc, profile) => {
+            acc[profile.id] = {
+                name: `${profile.firstname} ${profile.lastname}`,
+                profile_picture_url: profile.profile_picture_url,
+            };
+            return acc;
+        }, {});
+
+        const leaderboard = {};
+
+        activities.forEach(activity => {
+            const athleteId = activity.athlete_id;
+            if (!leaderboard[athleteId]) {
+                leaderboard[athleteId] = {
+                    athlete_id: athleteId,
+                    athlete_name: profilesMap[athleteId] ? profilesMap[athleteId].name : activity.athlete_name,
+                    profile_picture_url: profilesMap[athleteId] ? profilesMap[athleteId].profile_picture_url : null,
+                    total_walk_distance: 0,
+                    total_walk_time: 0,
+                    total_run_distance: 0,
+                    total_run_time: 0,
+                    total_weight_training_time: 0,
+                    total_soccer_time: 0,
+                    total_activities: 0,
+                };
+            }
+
+            leaderboard[athleteId].total_activities += 1;
+
+            if (activity.activity_type && activity.activity_type.toLowerCase() === 'walk') {
+                leaderboard[athleteId].total_walk_distance += activity.distance;
+                leaderboard[athleteId].total_walk_time += activity.elapsed_time;
+            }
+            else if (activity.activity_type && activity.activity_type.toLowerCase() === 'run') {
+                leaderboard[athleteId].total_run_distance += activity.distance;
+                leaderboard[athleteId].total_run_time += activity.elapsed_time;
+            }
+            else if (activity.activity_type && activity.activity_type.toLowerCase().includes('weighttraining')) {
+                leaderboard[athleteId].total_weight_training_time += activity.elapsed_time;
+            }
+            else if (activity.activity_type && activity.activity_type.toLowerCase().includes('soccer')) {
+                leaderboard[athleteId].total_soccer_time += activity.elapsed_time;
+            }
+        });
+
+        res.json(Object.values(leaderboard));
+    } catch (error) {
+        console.error('Error fetching overall leaderboard data:', error);
+        res.status(500).json({ error: 'Error fetching overall leaderboard data' });
+    }
+});
+
 app.listen(port, () => {
     console.log(`Server is running on http://localhost:${port}`);
 });
